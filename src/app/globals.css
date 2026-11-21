@@ -1,0 +1,118 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f1f3f6;
+  --border: #e3e6eb;
+  --text: #121826;
+  --muted: #5d6676;
+  --accent: #1f6f5c;
+  --accent-soft: #e3f1ec;
+  --good: #1f7a4d;
+  --good-soft: #e4f4ea;
+  --warn: #9a6700;
+  --warn-soft: #fbf1d9;
+  --bad: #b42318;
+  --bad-soft: #fde8e6;
+  --info: #2457c5;
+  --info-soft: #e6edfb;
+  --chart-1: #1f6f5c;
+  --chart-2: #2457c5;
+  --chart-3: #b7791f;
+  --chart-4: #8e44ad;
+  --chart-5: #c0392b;
+  --chart-6: #5d6676;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1116;
+    --surface: #161a21;
+    --surface-2: #1d222b;
+    --border: #2a303b;
+    --text: #e8ebf0;
+    --muted: #9aa3b2;
+    --accent: #4fb89a;
+    --accent-soft: #15302a;
+    --good: #4cc38a;
+    --good-soft: #13291e;
+    --warn: #e3b341;
+    --warn-soft: #2e2510;
+    --bad: #f47067;
+    --bad-soft: #351816;
+    --info: #6d9bf5;
+    --info-soft: #172340;
+    --chart-1: #4fb89a;
+    --chart-2: #6d9bf5;
+    --chart-3: #e3b341;
+    --chart-4: #c18be0;
+    --chart-5: #f47067;
+    --chart-6: #9aa3b2;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--border);
+  --color-fg: var(--text);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+input,
+select,
+textarea {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.875rem;
+  width: 100%;
+}
+input[type="checkbox"],
+input[type="radio"] {
+  width: auto;
+  accent-color: var(--accent);
+}
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+}
+label {
+  font-size: 0.8rem;
+  color: var(--muted);
+  display: block;
+}

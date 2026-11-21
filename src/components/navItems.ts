@@ -1,0 +1,15 @@
+export const NAV = [
+  { href: "/", label: "Dashboard", icon: "M3 12l9-8 9 8M5 10v10h14V10" },
+  { href: "/transactions", label: "Transactions", icon: "M4 6h16M4 12h16M4 18h10" },
+  { href: "/budget", label: "Budget", icon: "M4 19h16M7 16V9M12 16V5M17 16v-4" },
+  { href: "/accounts", label: "Accounts", icon: "M3 7h18v12H3zM3 11h18" },
+  { href: "/net-worth", label: "Net worth", icon: "M4 18l5-6 4 3 7-9" },
+  { href: "/couple", label: "Us", icon: "M8 11a3 3 0 100-6 3 3 0 000 6zM16 11a3 3 0 100-6 3 3 0 000 6zM2 20c0-3 3-5 6-5s6 2 6 5M12 20c0-3 3-5 6-5s4 1 4 3" },
+  { href: "/goals", label: "Goals", icon: "M12 21a9 9 0 110-18 9 9 0 010 18zM12 16a4 4 0 110-8 4 4 0 010 8z" },
+  { href: "/debt", label: "Debt", icon: "M4 6h16v12H4zM8 12h8" },
+  { href: "/recurring", label: "Recurring", icon: "M4 12a8 8 0 0114-5l2-2v6h-6l2-2a5 5 0 10 1 6" },
+  { href: "/forecast", label: "Cash forecast", icon: "M3 17l6-6 4 4 8-8M15 7h6v6" },
+  { href: "/reports", label: "Reports", icon: "M6 20V10M12 20V4M18 20v-6" },
+  { href: "/close", label: "Monthly close", icon: "M5 12l4 4 10-10" },
+  { href: "/settings", label: "Settings", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM4 12h2M18 12h2M12 4v2M12 18v2" },
+];

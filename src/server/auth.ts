@@ -124,6 +124,12 @@ export async function acceptInvite(token: string, input: { name: string; email: 
       .values({ id: userId, householdId: inv.householdId, email: input.email.toLowerCase().trim(), name: input.name, slot: "B", passwordHash })
       .run();
     tx.update(schema.invites).set({ usedAt: new Date().toISOString() }).where(eq(schema.invites.id, inv.id)).run();
+    const hh = tx.select().from(schema.households).where(eq(schema.households.id, inv.householdId)).get();
+    const settings = (hh?.settings ?? {}) as { partnerNames?: { A: string; B: string } };
+    tx.update(schema.households)
+      .set({ settings: { ...settings, partnerNames: { A: settings.partnerNames?.A ?? "Partner A", B: input.name } } })
+      .where(eq(schema.households.id, inv.householdId))
+      .run();
   });
   audit(inv.householdId, userId, "invite.accepted");
   await startSession(userId, true);
