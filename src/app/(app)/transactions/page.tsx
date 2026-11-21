@@ -2,7 +2,8 @@ import Link from "next/link";
 import { getContext } from "@/server/context";
 import { getDb, schema } from "@/db";
 import { eq } from "drizzle-orm";
-import { loadAccounts, loadCategories, loadTxnRows, loadSplits, ownerLabel, toCategory } from "@/server/repo";
+import { loadAccounts, loadCategories, loadTxnRows, loadSplits, ownerLabel, toAccount, toCategory, toTxn } from "@/server/repo";
+import { classifyAll, makeContext, summarize } from "@/domain/ledger";
 import { setTxnCategory, markReviewed, markAllReviewedBefore, confirmTransferSuggestion, rejectTransferSuggestion, resolveDuplicate, addManualTxn } from "@/server/actions";
 import { Badge, Card, Empty, Field, LinkButton, Money, PageHeader } from "@/components/ui";
 import { AutoSubmit, ActionForm, Submit } from "@/components/ActionForm";
@@ -68,8 +69,9 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
   const byId = new Map(rows.map((r) => [r.id, r]));
   const pairRows = filter === "transfers" ? getDb().select().from(schema.transactions).where(eq(schema.transactions.householdId, ctx.householdId)).all() : [];
   const pairById = new Map(pairRows.map((r) => [r.id, r]));
-  const totalIn = visible.filter((r) => r.amount > 0 && !r.isTransfer).reduce((s, r) => s + r.amount, 0);
-  const totalOut = visible.filter((r) => r.amount < 0 && !r.isTransfer).reduce((s, r) => s + r.amount, 0);
+  // Totals use the accounting engine so transfers, card payments, and retirement contributions aren't counted as income or spending.
+  const visTxns = visible.map((r) => toTxn(r, splits.get(r.id)));
+  const flow = summarize(classifyAll(visTxns, makeContext(accounts.map(toAccount), categories, visTxns)));
 
   const qs = (patch: Record<string, string | undefined>) => {
     const p = new URLSearchParams();
@@ -138,7 +140,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
       <div className="mb-2 flex justify-between text-xs text-muted num">
         <span>{visible.length} transactions</span>
         <span>
-          In <Money cents={totalIn} /> · Out <Money cents={-totalOut} />
+          Income <Money cents={flow.income} /> · Spending <Money cents={flow.spending} />{flow.saved ? <> · Saved <Money cents={flow.saved} /></> : null}
         </span>
       </div>
 
@@ -251,7 +253,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
         <ActionForm action={addManualTxn} className="grid gap-3 sm:grid-cols-6" resetOnSuccess>
           <Field label="Account">
             <select name="accountId" required>
-              {accounts.map((a) => (
+              {accounts.filter((a) => ["checking", "credit_card", "savings"].includes(a.type)).map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name}
                 </option>

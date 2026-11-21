@@ -5,7 +5,7 @@ import { computeMonth, derivedFlex, type MonthPlan } from "@/domain/budget";
 import { categorySpend, summarize, type ClassifiedLine, type OwnerFilter } from "@/domain/ledger";
 import { fundStatus, drawsFromSpending, type FundLedgerEntry, type SinkingFund } from "@/domain/sinkingFunds";
 import { netWorth, attribute, type AccountPeriod } from "@/domain/networth";
-import { INSTALLMENT_DEBT, isLiability, liquidity } from "@/domain/accounts";
+import { INSTALLMENT_DEBT, defaultLiquidity, isLiability, liquidity } from "@/domain/accounts";
 import { detectRecurring, monthlyEquivalent, type RecurringSeries } from "@/domain/recurring";
 import { monthlyIncomeModel, trueSavingsRate, type Paycheck } from "@/domain/income";
 import { scorecard } from "@/domain/scorecard";
@@ -121,11 +121,17 @@ export function netWorthHistory(householdId: string, months = 12, db: DB = getDb
     }
     points.push({ month: m, date, assets, liabilities, netWorth: assets + liabilities });
   }
-  return { points, balanceAt, accounts };
+  /** Balance at `date`, or the first known balance if tracking started later (an opening balance, not a change). */
+  const openingAt = (acctId: string, date: string, fallback: number): number => {
+    const arr = byAcct.get(acctId);
+    if (!arr?.length) return fallback;
+    return arr[0]!.date > date ? arr[0]!.balance : balanceAt(acctId, date, fallback);
+  };
+  return { points, balanceAt, openingAt, accounts };
 }
 
 export function netWorthAttribution(householdId: string, start: string, end: string, db: DB = getDb()) {
-  const { balanceAt, accounts } = netWorthHistory(householdId, 13, db);
+  const { balanceAt, openingAt, accounts } = netWorthHistory(householdId, 13, db);
   const rows = loadTxnRows(householdId, { start: addDays(start, 1), end }, db);
   const periods: AccountPeriod[] = accounts.map((a) => {
     const acct = toAccount(a);
@@ -135,7 +141,7 @@ export function netWorthAttribution(householdId: string, start: string, end: str
       // Contributions = transfers in/out and payroll deposits; everything else (dividends, gains) is market.
       for (const r of rows) if (r.accountId === a.id && (r.isTransfer || /contribution|deposit|transfer|payroll|employer/i.test(r.payeeRaw))) netContributions += r.amount;
     }
-    return { account: acct, startBalance: balanceAt(a.id, start, 0), endBalance: balanceAt(a.id, end, a.balance), netContributions };
+    return { account: acct, startBalance: openingAt(a.id, start, a.balance), endBalance: balanceAt(a.id, end, a.balance), netContributions };
   });
   return attribute(periods, start, end);
 }
@@ -172,22 +178,29 @@ export function essentialMonthly(byCategory: Map<string | null, number>, cats: M
 export function healthScorecard(householdId: string, today: string, db: DB = getDb()) {
   const ledger = loadLedger(householdId, { start: monthStart(addMonths(monthKey(today), -13)), end: today }, db);
   const cats = new Map(ledger.categories.map((c) => [c.id, c]));
-  const t3 = trailing(ledger.lines, today, 3);
-  const t3sum = summarize(ledger.lines, { start: t3.start, end: t3.end });
-  const essential = essentialMonthly(t3sum.byCategory, cats, 3);
+  // Average over the complete months we actually have data for (up to 3), not a fixed 3.
+  const t3full = trailing(ledger.lines, today, 3);
+  const covered = new Set(ledger.lines.filter((l) => l.kind === "expense" && l.date >= t3full.start && l.date <= t3full.end).map((l) => l.date.slice(0, 7))).size;
+  const n = Math.max(1, covered);
+  const t3sum = summarize(ledger.lines, { start: t3full.start, end: t3full.end });
+  const t3 = { ...t3full, income: Math.round(t3sum.income / n), spending: Math.round(t3sum.spending / n), saved: Math.round(t3sum.saved / n) };
+  const essential = essentialMonthly(t3sum.byCategory, cats, n);
   const paychecks = loadPaychecks(householdId, db);
   const model = monthlyIncomeModel(paychecks);
   const accts = ledger.accounts.filter((a) => !a.isHidden);
   const nw = netWorth(accts);
   const cardsOwed = accts.filter((a) => a.type === "credit_card").reduce((s, a) => s + Math.max(0, -a.balance), 0);
-  const liquid = nw.byLiquidity.cash + nw.byLiquidity.near_cash - cardsOwed;
+  // Sinking-fund money is earmarked for known bills, so it isn't emergency money.
+  const { funds, ledger: fundStored } = loadFunds(householdId, db);
+  const earmarked = funds.length ? fundLedgerWithDraws(funds, fundStored, ledger.lines).reduce((sum, e) => sum + e.amount, 0) : 0;
+  const liquid = nw.byLiquidity.cash + nw.byLiquidity.near_cash - cardsOwed - Math.max(0, earmarked);
   let fixed = 0;
   let housing = 0;
   let debtPay = 0;
   for (const [cid, amt] of t3sum.byCategory) {
     const c = cid ? cats.get(cid) : undefined;
     if (!c) continue;
-    const spent = -amt / 3;
+    const spent = -amt / n;
     if (c.budgetType === "fixed") fixed += spent;
     if (c.group === "Housing" && c.budgetType === "fixed") housing += spent;
     if (c.group === "Debt payments" || /mortgage|car payment|loan/i.test(c.name)) debtPay += spent;
@@ -215,8 +228,21 @@ export function healthScorecard(householdId: string, today: string, db: DB = get
     creditUtilization: util.overall,
     netWorth: nw.netWorth,
     netWorthChange12m: nwChange,
+    insufficientHistory: covered < 2,
   });
-  return { metrics, essential, model, trailing3: t3, nw, liquid, savingsRateIsTrue: model.gross > 0 };
+  // Money actually invested each month (trailing 3 months). Retirement-account deposits are skipped when a
+  // paycheck model exists, because payroll contributions are already counted there.
+  const acctById = new Map(accts.map((a) => [a.id, a]));
+  let invested = 0;
+  for (const l of ledger.lines) {
+    if (l.kind !== "savings" || l.date < t3.start || l.date > t3.end) continue;
+    const a = acctById.get(l.accountId);
+    if (!a) continue;
+    const tier = a.liquidity ?? defaultLiquidity(a.type);
+    if (tier === "invested" || (tier === "retirement" && !model.gross)) invested += l.saved;
+  }
+  const investedMonthly = Math.round(invested / n) + model.payrollSavings;
+  return { metrics, essential, model, trailing3: t3, monthsOfHistory: covered, nw, liquid, earmarked: Math.max(0, earmarked), savingsRateIsTrue: model.gross > 0, investedMonthly };
 }
 
 // ---------------- Recurring ----------------
@@ -225,9 +251,18 @@ export function recurringSeries(householdId: string, today: string, db: DB = get
   const rows = loadTxnRows(householdId, { start: addDays(today, -400) }, db);
   const series = detectRecurring(rows.map((r) => toTxn(r)), today);
   const states = new Map(db.select().from(schema.recurringSeries).where(eq(schema.recurringSeries.householdId, householdId)).all().map((s) => [s.key, s]));
+  const cats = new Map(loadCategories(householdId, db).map((c) => [c.id, c]));
   return series
     .map((s) => ({ ...s, status: states.get(s.key)?.status ?? "detected", label: states.get(s.key)?.label ?? s.merchant }))
-    .filter((s) => s.status !== "dismissed");
+    .filter((s) => s.status !== "dismissed")
+    // A weekly coffee or monthly Sephora run is a habit, not a bill: discretionary
+    // categories with varying amounts are excluded unless the user confirmed them.
+    .filter((s) => {
+      if (s.status === "confirmed" || s.direction === "inflow") return true;
+      const bt = s.categoryId ? cats.get(s.categoryId)?.budgetType : undefined;
+      const discretionary = bt === "flex" || bt === undefined || cats.get(s.categoryId ?? "")?.isPersonalAllowance;
+      return !(discretionary && s.amountVaries);
+    });
 }
 
 export function subscriptionsAnnual(series: Array<RecurringSeries & { status: string }>): number {
@@ -261,7 +296,7 @@ export function coupleSummary(householdId: string, today: string, db: DB = getDb
     const mm = addMonths(m, -i);
     jointTrend.push({ month: mm, share: jointShare(ledger.lines, { start: monthStart(mm), end: monthEnd(mm) }) });
   }
-  return { policy, all, thisMonth, jointTrend, names: hh.names, ledger };
+  return { policy, rawPolicy: hh.policy, all, thisMonth, jointTrend, names: hh.names, ledger };
 }
 
 // ---------------- Forecast ----------------

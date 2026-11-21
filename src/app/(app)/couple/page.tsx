@@ -115,10 +115,10 @@ export default async function CouplePage() {
                 <input name="shareA" inputMode="decimal" defaultValue={policy.default.shareA != null ? Math.round(policy.default.shareA * 100) : ""} />
               </Field>
               <Field label={`${names.A} monthly income`} hint={incA ? `Paychecks: ${formatCents(incA, { noCents: true })}` : "From paychecks if blank"}>
-                <input name="incomeA" inputMode="decimal" defaultValue={dollarsInput(policy.incomeA || null)} />
+                <input name="incomeA" inputMode="decimal" defaultValue={dollarsInput(c.rawPolicy.incomeA || null)} />
               </Field>
               <Field label={`${names.B} monthly income`} hint={incB ? `Paychecks: ${formatCents(incB, { noCents: true })}` : "From paychecks if blank"}>
-                <input name="incomeB" inputMode="decimal" defaultValue={dollarsInput(policy.incomeB || null)} />
+                <input name="incomeB" inputMode="decimal" defaultValue={dollarsInput(c.rawPolicy.incomeB || null)} />
               </Field>
             </div>
             <div>
@@ -126,7 +126,8 @@ export default async function CouplePage() {
               {[...overrides, ["", { mode: "" as const }], ["", { mode: "" as const }]].map(([cid, rule], i) => (
                 <div key={i} className="mb-2 grid grid-cols-[1fr_9rem_5rem] gap-2">
                   <select name="overrideCategory" defaultValue={cid as string} aria-label="Category">
-                    <CategoryOptions categories={categories} />
+                    <option value="">Choose category…</option>
+                    <CategoryOptions categories={categories} includeNone={false} />
                   </select>
                   <select name="overrideMode" defaultValue={(rule as { mode: string }).mode} aria-label="Split">
                     <option value="">—</option>

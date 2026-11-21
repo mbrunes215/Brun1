@@ -44,6 +44,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     .slice(0, 8);
   const tax = taxPacket(ledger.lines, year);
   const total = groups.reduce((s, [, v]) => s + v, 0);
+  const earliest = ledger.txns.reduce((m, t) => (t.date < m ? t.date : m), ctx.today);
+  const priorLabel = earliest > `${year - 1}-01-15` ? `${year - 1} (partial, from ${earliest})` : String(year - 1);
 
   return (
     <>
@@ -59,10 +61,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       />
       <h2 className="mb-2 text-sm font-semibold text-muted">{year} year to date</h2>
       <div className="grid gap-3 sm:grid-cols-4">
-        <Stat label="Income" value={formatCents(ytd.income, { noCents: true })} hint={prior.income ? `${year - 1}: ${formatCents(prior.income, { noCents: true })}` : undefined} />
-        <Stat label="Spending" value={formatCents(ytd.spending, { noCents: true })} hint={prior.spending ? `${year - 1}: ${formatCents(prior.spending, { noCents: true })}` : undefined} />
+        <Stat label="Income" value={formatCents(ytd.income, { noCents: true })} hint={prior.income ? `${priorLabel}: ${formatCents(prior.income, { noCents: true })}` : undefined} />
+        <Stat label="Spending" value={formatCents(ytd.spending, { noCents: true })} hint={prior.spending ? `${priorLabel}: ${formatCents(prior.spending, { noCents: true })}` : undefined} />
         <Stat label="Moved to savings" value={formatCents(ytd.saved, { noCents: true })} />
-        <Stat label="Cash savings rate" value={pct(ytd.income ? (ytd.income - ytd.spending) / ytd.income : null)} hint={sc.savingsRateIsTrue ? `True rate incl. payroll: ${sc.metrics.find((x) => x.key === "savings_rate")?.display}` : "Bank deposits only"} />
+        <Stat label="Saved of take-home" value={pct(ytd.income ? (ytd.income - ytd.spending) / ytd.income : null)} hint={sc.savingsRateIsTrue ? `Of gross incl. 401(k)/HSA/match: ${sc.metrics.find((x) => x.key === "savings_rate")?.display}` : "Bank deposits only"} />
       </div>
 
       <Card className="mt-4" title="Cash flow, last 12 months">

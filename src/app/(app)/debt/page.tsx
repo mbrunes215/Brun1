@@ -10,13 +10,17 @@ import type { AccountType } from "@/domain/types";
 
 export const dynamic = "force-dynamic";
 
-export default async function DebtPage({ searchParams }: { searchParams: Promise<{ extra?: string }> }) {
+export default async function DebtPage({ searchParams }: { searchParams: Promise<{ extra?: string; mortgage?: string }> }) {
   const sp = await searchParams;
   const ctx = await getContext();
   const accounts = loadAccounts(ctx.householdId).filter((a) => LIABILITY_TYPES.has(a.type as AccountType) && !a.isHidden && a.balance < 0);
   const extra = Math.max(0, Math.round(Number(sp.extra ?? 200) * 100));
-  const usable = accounts.filter((a) => a.apr != null && a.minPayment);
-  const missing = accounts.filter((a) => a.apr == null || !a.minPayment);
+  const includeMortgage = sp.mortgage === "1";
+  // Mortgages are usually left on schedule (extra payments compete with investing at similar rates), so they're opt-in.
+  const inPlan = accounts.filter((a) => includeMortgage || a.type !== "mortgage");
+  const usable = inPlan.filter((a) => a.apr != null && a.minPayment);
+  // Cards without APR/minimum are assumed to be paid in full monthly; loans without them are missing data.
+  const missing = inPlan.filter((a) => a.type !== "credit_card" && (a.apr == null || !a.minPayment));
   const debts: Debt[] = usable.map((a) => ({ id: a.id, name: a.name, balance: -a.balance, apr: a.apr!, minPayment: a.minPayment! }));
   let cmp: ReturnType<typeof compareStrategies> | null = null;
   let err: string | null = null;
@@ -53,7 +57,8 @@ export default async function DebtPage({ searchParams }: { searchParams: Promise
             {missing.length > 0 && (
               <Notice tone="info">Add APR and minimum payment for {missing.map((a) => a.name).join(", ")} to include them in the payoff plan. <Link href={`/accounts/${missing[0]!.id}`} className="underline">Edit</Link></Notice>
             )}
-            {cards.some((a) => a.apr && a.apr > 0.15) && <Notice tone="info">Card balances paid in full each month cost nothing. Only balances carried past the due date accrue interest, so the APR only matters if you carry a balance.</Notice>}
+            {cards.some((a) => !a.minPayment) && <Notice tone="info">Cards without a minimum payment set are treated as paid in full each month, which costs no interest. If you carry a balance on one, add its APR and minimum so it's prioritized (it's almost always the most expensive debt).</Notice>}
+            {!includeMortgage && accounts.some((a) => a.type === "mortgage") && <p className="text-xs text-muted">Mortgage excluded from the plan: at typical rates, extra principal competes with investing and liquidity. Pay off consumer debt first, keep the emergency fund full, then decide.</p>}
           </div>
 
           <Card className="mt-4" title="Payoff planner" subtitle="Both strategies pay every minimum, then put the extra toward one debt at a time. Freed-up payments roll to the next debt.">
@@ -62,6 +67,9 @@ export default async function DebtPage({ searchParams }: { searchParams: Promise
                 <label htmlFor="extra">Extra per month</label>
                 <input id="extra" name="extra" inputMode="decimal" defaultValue={(extra / 100).toFixed(0)} className="!w-32" />
               </div>
+              <label className="flex items-center gap-2 pb-2 text-sm text-fg">
+                <input type="checkbox" name="mortgage" value="1" defaultChecked={includeMortgage} /> Include mortgage
+              </label>
               <button className="rounded-lg border border-line px-3 py-1.5 text-sm hover:bg-surface-2">Recalculate</button>
             </form>
             {err && <Notice tone="bad">{err}</Notice>}

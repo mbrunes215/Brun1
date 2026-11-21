@@ -123,7 +123,10 @@ export default async function Dashboard() {
             </div>
           ))}
         </div>
-        {!sc.savingsRateIsTrue && (
+        {sc.monthsOfHistory < 2 && (
+          <p className="mt-3 text-xs text-muted">Spending ratios appear after two full months of history ({sc.monthsOfHistory} so far). Import older statements to see them sooner.</p>
+        )}
+        {!sc.savingsRateIsTrue && sc.monthsOfHistory >= 2 && (
           <p className="mt-3 text-xs text-muted">
             Savings rate is estimated from bank deposits only. <Link className="text-accent underline" href="/settings/income">Add paychecks</Link> to include pre-tax 401(k), HSA, and employer match.
           </p>

@@ -279,6 +279,16 @@ describe("scorecard & retirement", () => {
     const by = Object.fromEntries(m.map((x) => [x.key, x.status]));
     expect(by).toEqual({ savings_rate: "good", emergency_fund: "good", dti: "ok", housing: "good", fixed_ratio: "ok", utilization: "ok", nw_income: "good" });
   });
+  it("withholds spending-based ratings when history is too short to be meaningful", () => {
+    const m = scorecard({
+      monthlyGross: 1500000, monthlyNet: 1000000, trueSavingsRate: 0.94, monthlyEssential: 20000, liquidSavings: 1700000,
+      monthlyDebtPayments: 0, monthlyHousing: 0, monthlyFixed: 0, creditUtilization: 0.05, netWorth: 100000, netWorthChange12m: null, insufficientHistory: true,
+    });
+    const by = Object.fromEntries(m.map((x) => [x.key, x.status]));
+    expect(by.savings_rate).toBe("unknown");
+    expect(by.emergency_fund).toBe("unknown");
+    expect(by.utilization).toBe("good"); // balance-based metrics still apply
+  });
   it("projects FI with the 4% rule", () => {
     const r = projectRetirement({ currentInvested: 10000000, annualContribution: 3000000, annualSpendInRetirement: 8000000, yearsToRetirement: 25, realReturn: 0.05 });
     expect(r.fiNumber).toBe(200000000);

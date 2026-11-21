@@ -22,16 +22,20 @@ export default async function GoalsPage() {
   const acctById = new Map(accounts.map((a) => [a.id, a]));
   const { balanceAt } = netWorthHistory(ctx.householdId, 4);
   const m = ctx.today.slice(0, 7);
+  const mbFunds = monthBudget(ctx.householdId, ctx.today.slice(0, 7), ctx.today);
+  const earmarkedBy = new Map<string, number>();
+  for (const f of mbFunds.statuses) if (f.fund.backingAccountId) earmarkedBy.set(f.fund.backingAccountId, (earmarkedBy.get(f.fund.backingAccountId) ?? 0) + Math.max(0, f.balance));
   const goals: Goal[] = rows.map((g) => {
     const linked = g.linkedAccountIds ?? [];
     const sumAt = (d: string) => linked.reduce((s, id) => s + Math.abs(balanceAt(id, d, acctById.get(id)?.balance ?? 0)), 0);
-    const current = linked.length ? linked.reduce((s, id) => s + Math.abs(acctById.get(id)?.balance ?? 0), 0) - g.startingBalance + g.manualProgress : g.manualProgress;
+    // Sinking-fund money parked in a linked account is earmarked, so it doesn't count toward the goal.
+    const current = linked.length ? linked.reduce((s, id) => s + Math.abs(acctById.get(id)?.balance ?? 0) - (earmarkedBy.get(id) ?? 0), 0) - g.startingBalance + g.manualProgress : g.manualProgress;
     // Net change in linked balances for each of the last three complete months.
     const recent = linked.length ? [3, 2, 1].map((k) => sumAt(monthEnd(addMonths(m, -k))) - sumAt(monthEnd(addMonths(m, -k - 1)))) : [];
     return { id: g.id, name: g.name, type: g.type as Goal["type"], target: g.target, targetDate: g.targetDate, priority: g.priority, current: Math.max(0, current), recentContributions: recent };
   });
   const statuses = goals.sort((a, b) => a.priority - b.priority).map((g) => goalStatus(g, ctx.today));
-  const mb = monthBudget(ctx.householdId, m, ctx.today);
+  const mb = mbFunds;
   const plan = waterfall(goals, mb.plan.savingsGoals, ctx.today);
   const sc = healthScorecard(ctx.householdId, ctx.today);
   const ef = emergencyFundTarget(sc.essential, { dualIncome: true, variableIncome: false });
@@ -43,7 +47,7 @@ export default async function GoalsPage() {
     age && r.retireAge
       ? projectRetirement({
           currentInvested: investedNow,
-          annualContribution: (sc.model.payrollSavings + Math.max(0, sc.trailing3.income - sc.trailing3.spending)) * 12,
+          annualContribution: sc.investedMonthly * 12,
           annualSpendInRetirement: r.retirementSpend ?? sc.trailing3.spending * 12,
           yearsToRetirement: Math.max(0, r.retireAge - age),
           realReturn: r.realReturn ?? 0.05,
@@ -57,7 +61,7 @@ export default async function GoalsPage() {
         <div className="mb-4">
           <Notice tone="info">
             Start with an emergency fund: {ef.months} months of essential spending ({formatCents(sc.essential, { noCents: true })}/mo) = <strong>{formatCents(ef.target, { noCents: true })}</strong>. You currently hold{" "}
-            {formatCents(sc.liquid, { noCents: true })} in cash and savings (after card balances). Use 6 months if either income is variable or you have one income.
+            {formatCents(sc.liquid, { noCents: true })} in cash and savings (after card balances and {formatCents(sc.earmarked, { noCents: true })} earmarked for sinking funds). Use 6 months if either income is variable or you have one income.
           </Notice>
         </div>
       )}
@@ -92,7 +96,7 @@ export default async function GoalsPage() {
             <div><div className="text-xs text-muted">Projected at {r.retireAge}</div><div className="text-lg font-semibold num">{formatCents(proj.projectedAtRetirement, { noCents: true })}</div></div>
             <div><div className="text-xs text-muted">Funded</div><div className={`text-lg font-semibold ${proj.fundedRatio >= 1 ? "text-good" : "text-warn"}`}>{Math.round(proj.fundedRatio * 100)}%</div></div>
             <div><div className="text-xs text-muted">Needed per year</div><div className="text-lg font-semibold num">{formatCents(proj.requiredAnnualContribution, { noCents: true })}</div></div>
-            <p className="text-xs text-muted sm:col-span-4">Assumes {Math.round((r.realReturn ?? 0.05) * 1000) / 10}% real return, contributions of payroll savings plus cash-flow surplus, and today's spending continuing in retirement unless set. Change assumptions in Settings → Household.</p>
+            <p className="text-xs text-muted sm:col-span-4">Assumes {Math.round((r.realReturn ?? 0.05) * 1000) / 10}% real return, contributions at your current pace ({formatCents(sc.investedMonthly, { noCents: true })}/mo: payroll plus transfers to investment accounts; cash left in checking isn't counted), and today's spending continuing in retirement unless set. Change assumptions in Settings → Household.</p>
           </div>
         ) : (
           <p className="text-sm text-muted">Add your ages and target retirement age in Settings → Household to see this.</p>

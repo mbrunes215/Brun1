@@ -1,0 +1,15 @@
+services:
+  hearth:
+    build: .
+    image: hearth:latest
+    container_name: hearth
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      TZ: ${TZ:-America/New_York}
+    volumes:
+      - ./data:/data
+    # Bind to localhost only. Reach it from your phones through Tailscale
+    # (see README). Do not expose this port to the internet.
+    ports:
+      - "127.0.0.1:3000:3000"

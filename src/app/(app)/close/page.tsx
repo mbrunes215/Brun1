@@ -79,7 +79,7 @@ export default async function ClosePage({ searchParams }: { searchParams: Promis
               {staleManual.length === 0 ? "Home, car, and manual loans are current." : <>Update: {staleManual.map((a, i) => <span key={a.id}>{i > 0 && ", "}<Link className="text-accent underline" href={`/accounts/${a.id}`}>{a.name}</Link></span>)}</>}
             </Step>
             <Step n={4} title="Settle up" done={couple.policy.fullyJoint || couple.all.balance === 0}>
-              {couple.policy.fullyJoint ? "Fully joint." : couple.all.balance === 0 ? "All square." : <>{couple.all.balance > 0 ? couple.names.B : couple.names.A} owes {formatCents(Math.abs(couple.all.balance))}. <Link className="text-accent underline" href="/couple">Record it</Link></>}
+              {couple.policy.fullyJoint ? "Fully joint." : couple.all.balance === 0 ? "All square." : <>{couple.all.balance > 0 ? couple.names.B : couple.names.A} owes {couple.all.balance > 0 ? couple.names.A : couple.names.B} {formatCents(Math.abs(couple.all.balance))}. <Link className="text-accent underline" href="/couple">Record it</Link></>}
             </Step>
             <Step n={5} title="Talk through the variances" done={over.every((l) => notes.get(l.categoryId))}>
               {over.length === 0 ? "Every category came in on or under plan." : (
@@ -132,7 +132,7 @@ export default async function ClosePage({ searchParams }: { searchParams: Promis
               <div className="flex justify-between"><dt>Fixed</dt><dd><Money cents={r.fixed.spent} /> <span className="text-xs text-muted">/ {formatCents(r.fixed.budgeted, { noCents: true })}</span></dd></div>
               <div className="flex justify-between"><dt>Flex</dt><dd><Money cents={r.flex.spent} /> <span className="text-xs text-muted">/ {formatCents(r.flex.budgeted + r.flex.carryIn, { noCents: true })}</span></dd></div>
               <div className="flex justify-between"><dt>From sinking funds</dt><dd><Money cents={r.nonMonthly.spent} /></dd></div>
-              <div className="flex justify-between border-t border-line pt-1 font-semibold"><dt>Left over</dt><dd><Money cents={r.income.actual - r.fixed.spent - r.flex.spent - r.nonMonthly.spent} colored /></dd></div>
+              <div className="flex justify-between border-t border-line pt-1 font-semibold"><dt title="Before transfers to savings and investments">Income − spending</dt><dd><Money cents={r.income.actual - r.fixed.spent - r.flex.spent - r.nonMonthly.spent} colored /></dd></div>
             </dl>
           </Card>
           <Card title="Closed months">

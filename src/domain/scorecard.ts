@@ -29,6 +29,8 @@ export interface ScorecardInputs {
   creditUtilization: number | null;
   netWorth: Cents;
   netWorthChange12m: Cents | null;
+  /** Fewer than 2 full months of spending history: spending-based ratios would mislead. */
+  insufficientHistory?: boolean;
 }
 
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
@@ -115,6 +117,15 @@ export function scorecard(i: ScorecardInputs): Metric[] {
     explain: "Net worth as a multiple of annual gross income. Status reflects the 12-month trend.",
   });
 
+  if (i.insufficientHistory) {
+    const spendBased = new Set(["savings_rate", "emergency_fund", "fixed_ratio", "housing", "dti"]);
+    for (const x of m) {
+      if (!spendBased.has(x.key)) continue;
+      x.status = "unknown";
+      x.display = "—";
+      x.value = null;
+    }
+  }
   return m;
 }
 
